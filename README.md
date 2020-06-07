@@ -5,7 +5,7 @@ This is a simple bash script for fetching and joining ts movie segments based on
 ## Installation ##
 
 1. Clone this repository or download `fetch_ts_movies` file.
-*. Put `fetch_ts_movies` into one of paths listed int `$PATH` variable
+2. Put `fetch_ts_movies` into one of paths listed int `$PATH` variable
 
 e.g.
 ```bash
