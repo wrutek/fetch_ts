@@ -1,0 +1,87 @@
+#!/bin/bash
+# vim: set filetype=sh:
+
+COLOR_TITLE="\e[38;5;44m"
+COLOR_VALUE="\e[38;5;240m"
+COLOR_INFO="\e[38;5;66m"
+COLOR_HAPPY="\e[5m\e[38;5;46m"
+COLOR_WARNING="\e[38;5;143m"
+RESET_COLOR="\e[0m"
+
+__cleanup_counter=0
+__cleanup()
+{
+	if [[ ! $__cleanup_counter == 0 ]]; then
+		return
+	fi
+
+	echo -e "\n${COLOR_WARNING}SHUTTING DOWN$RESET_COLOR"
+
+	if [[ -f $output_file ]]; then
+		mv "$output_file" ./"$output_file_name"
+	fi
+		
+	if [[ -d $dir_name ]]; then
+		rm -rf "$dir_name"
+	fi
+
+	if [[ -f $clean_playlist ]]; then
+		rm "$clean_playlist"
+	fi
+
+	__cleanup_counter=$((__cleanup_counter+1))
+	exit
+}
+
+trap __cleanup EXIT ERR
+
+spiner="\|/-"
+dir_name=".$(date +%s)"
+output_file_name="$(date +%s).stream.mp4"
+host=$(echo "$1" | sed 's/\(.*\)\/.*m3u8/\1/')
+playlist_file="$dir_name/playlist.m3u8"
+clean_playlist=$(mktemp)
+if [[ $# == 2 ]]; then
+	output_file_name=$2
+fi
+output_file="$dir_name/$output_file_name"
+
+
+# setup script
+mkdir "$dir_name"
+
+# fetch ts playlist
+echo -e "${COLOR_TITLE}Fetching ts chunks from: ${COLOR_VALUE}$host${RESET_COLOR}"
+
+wget -q -O "$playlist_file" "$1"
+
+
+echo -e "$COLOR_INFO - playlist file fetched$RESET_COLOR"
+num_files=0
+while read -r file; do
+	if [[ ! $file =~ ^#.* ]]; then
+		echo "$file" >> "$clean_playlist"
+		num_files=$((num_files+1))
+	fi
+done < "$playlist_file"
+
+echo -e "$COLOR_INFO - fetching ts files$RESET_COLOR"
+
+index=-1
+while read -r file; do
+	index=$((index+1))
+	if [[ -f $file ]]; then
+		#echo "File $file already exists"
+		continue
+	fi;
+	
+	echo -ne "${COLOR_TITLE}Progress: ${COLOR_VALUE}$((index*100/num_files))% ${spiner:$((index%${#spiner})):1}  ${RESET_COLOR} \r"
+	wget -q -O "$dir_name/$file" "$host/$file"
+done < "$clean_playlist"
+echo ""
+echo -e "$COLOR_INFO - all chunk files fetched$RESET_COLOR"
+
+echo -e "$COLOR_INFO - stiching ts files into mp4$RESET_COLOR"
+ffmpeg -hide_banner -loglevel panic -i "$playlist_file" -c copy "$output_file"
+echo -e "${COLOR_HAPPY}Success! $RESET_COLOR"
+
